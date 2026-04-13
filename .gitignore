@@ -4,3 +4,4 @@ dist
 dist-ui
 __generated__
 /.parcel-cache
+.agents/mcp/context_pack/packs/
