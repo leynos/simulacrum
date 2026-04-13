@@ -1,298 +1,334 @@
 # GitHub API scriptability roadmap
 
-This roadmap sets out the work needed to make
-`@simulacrum/github-api-simulator` fully scriptable for the most commonly used
-GitHub workflows. It starts from the current capability gaps described in
-`packages/github-api/docs/github-rest-api-audit.md` and
-`packages/github-api/docs/github-graphql-api-audit.md`.
+This roadmap reprioritises `@simulacrum/github-api-simulator` around the
+current consumer portfolio rather than generic GitHub collaboration parity.
+The delivery order now follows three primary drivers:
 
-The roadmap uses a vertical slice approach. Phase 1 delivers the minimum
-foundations required for reliable write behaviour. Every later phase then
-delivers a complete, testable collaboration slice rather than another layer of
-abstract plumbing.
+- Concordat drives the control-plane and administration model.
+- Ghillie drives the read-heavy GraphQL model.
+- shared-actions drives mergeability, auto-merge, and release lookups.
 
-## Scope and operating principles
+Nile Valley remains relevant, but it should not dominate the queue because its
+core workflows lean more heavily on plain git operations and GitHub Actions
+file semantics than on deep GitHub REST or GraphQL behaviour.
 
-- Focus on the GitHub functionality most often used by application developers,
-  bots, and internal platform tooling: repositories, issues, pull requests,
-  review threads, checks, merges, webhooks, and notifications.
-- Prefer shared domain entities and behaviour over one-off endpoint stubs.
-- Treat REST and GraphQL as parallel views over the same underlying state.
-- Keep each step outcome-driven, measurable, and independently valuable.
-- Do not target perfect parity with every GitHub product surface in this
-  roadmap. Enterprise administration, packages, Actions orchestration, code
-  scanning, and billing remain out of scope unless they are needed to support
-  the collaboration slices below.
+The roadmap still uses a vertical-slice approach. The difference is that the
+first useful slices now reflect the products that consume the simulator today.
 
-| Phase | Delivered capability                     | Why it matters                                                                   |
-| ----- | ---------------------------------------- | -------------------------------------------------------------------------------- |
-| 1     | Shared writeable collaboration model     | Unlocks reliable mutations, identity, and eventing.                              |
-| 2     | Repository and issue collaboration       | Delivers the first complete day-to-day workflow.                                 |
-| 3     | Pull request lifecycle                   | Makes branch-based change proposals scriptable end to end.                       |
-| 4     | Reviews and review threads               | Enables review tooling, approval flows, and threaded discussion.                 |
-| 5     | Checks, mergeability, and merge outcomes | Supports branch protection and automation-driven merges.                         |
-| 6     | App-facing integration surfaces          | Makes the simulator useful for GitHub App and Backstage-style integration tests. |
+## Scope and prioritisation principles
 
-_Table 1: Phase-level roadmap summary._
+- Prioritise scriptable behaviours that unlock real repository governance and
+  control-plane automation before richer collaboration theatre.
+- Treat REST and GraphQL as parallel views over the same state, with GraphQL
+  read parity landing early where portfolio consumers already depend on it.
+- Keep the early foundation work narrow: fix canonical identities, actor
+  resolution, mutation plumbing, and fixtures before adding broad parity.
+- Prefer a small number of complete, testable consumer-shaped slices over wide
+  endpoint coverage with placeholder responses.
+- Defer low-leverage surfaces such as webhook breadth, Projects v2 parity, and
+  code-scanning parity until the shared substrate is credible.
 
-## 1. Core collaboration substrate
+| Tranche | Primary consumer               | Delivered capability                                                    |
+| ------- | ------------------------------ | ----------------------------------------------------------------------- |
+| 1       | All consumers                  | Canonical identities, actors, mutation plumbing, and fixtures.          |
+| 2       | Ghillie, shared-actions        | Read-heavy GraphQL parity for refs, history, pull requests, and issues. |
+| 3       | Concordat, shared-actions      | Real branch-to-pull-request state transitions.                          |
+| 4       | Concordat                      | Repository administration, branch protection, and teams.                |
+| 5       | shared-actions, Concordat      | Statuses, checks, mergeability, auto-merge, and release tag lookup.     |
+| 6       | Concordat, shared-actions      | Review state and approval modelling.                                    |
+| 7       | Concordat                      | Review threads and conversation resolution.                             |
+| 8       | Reporting and triage consumers | Deeper issue collaboration and timelines.                               |
+| 9       | simulacat and test harnesses   | Capability matrix, fixture recipes, and scenario suites.                |
+| 10      | App integrations               | Webhooks and delivery inspection.                                       |
+| 11      | Concordat follow-on work       | Governance extras such as Projects v2 and code scanning.                |
 
-This phase is the only foundation-heavy phase. Its purpose is to establish a
-shared domain model and mutation framework that later slices can reuse without
-rewriting state handling for every feature.
+_Table 1: Delivery tranches after reprioritisation._
 
-### 1.1. Canonical GitHub identity and storage model
+## 1. Canonical identities and actor-aware foundations
 
-- [ ] 1.1.1. Re-key core store entities by canonical identifiers.
-  - Replace repository and branch keying by plain `name` with stable composite
-    identifiers such as `owner/name` and `owner/name:ref`.
-  - Ensure two repositories with the same name under different owners can
-    coexist in the same test fixture.
-- [ ] 1.1.2. Introduce first-class collaboration entities.
-  - Add store entities for commits, refs, issues, issue comments, pull
-    requests, pull request reviews, review comments, review threads, labels,
-    assignees, milestones, check suites, check runs, and webhook deliveries.
-  - Define relation fields explicitly so REST and GraphQL selectors can derive
-    read models without ad hoc joins.
-- [ ] 1.1.3. Define immutable identifier and timestamp rules.
-  - Standardise id generation, node id generation, timestamps, and URL
-    generation for newly created entities.
-  - Completion criteria: create, update, and delete operations preserve stable
-    ids and monotonically increasing event order in tests.
+This tranche keeps only the essential Phase 1 surgery. It should land before
+any larger behaviour slices because the current shortcuts make later work
+unreliable.
 
-### 1.2. Actor context, authorisation, and visibility
-
-- [ ] 1.2.1. Introduce request-scoped actor resolution.
+- [ ] 1.1. Deliver `1.1.1`: re-key repositories and refs by canonical
+      identifiers.
+  - Use stable keys such as `owner/name` and `owner/name:ref`.
+  - Remove assumptions that repository and branch names are globally unique.
+- [ ] 1.2. Deliver a minimal form of `1.1.2`: add only the first-class
+      entities needed immediately for refs, commits, issues, and pull
+      requests.
+  - Defer the wider collaboration lattice until later tranches need it.
+- [ ] 1.3. Deliver `1.2.1` and `1.2.3`: add request-scoped actor resolution
+      and expose actor context to REST and GraphQL.
   - Support at least anonymous, user, app, and installation actors.
-  - Map inbound tokens or headers to a deterministic actor fixture for tests.
-- [ ] 1.2.2. Model repository membership and permissions.
-  - Add repository roles, team membership, and installation permissions with
-    enough fidelity to gate common collaboration operations.
-  - Completion criteria: permission tests distinguish read, write, triage,
-    maintain, and admin behaviour where relevant.
-- [ ] 1.2.3. Expose actor context to REST and GraphQL.
-  - Replace the current "first user in the store" behaviour with actor-aware
-    selectors for `viewer`, `/user`, memberships, and repository access.
+  - Replace the current `/user` and `viewer` shortcuts with actor-aware
+    selectors.
+- [ ] 1.4. Deliver `1.3.1` and `1.3.3`: add shared domain actions and fixture
+      builders.
+  - Centralise write behaviour in reducers and shared actions.
+  - Publish builders that can create repositories, refs, issues, and pull
+    requests without hand-editing store state.
 
-### 1.3. Shared mutation, event, and fixture framework
+Completion criteria:
 
-- [ ] 1.3.1. Add domain actions and reducers for write workflows.
-  - Create typed actions for create, update, close, reopen, merge, review, and
-    comment operations instead of mutating route-local response objects.
-- [ ] 1.3.2. Add event emission and timeline recording.
-  - Record state changes as timeline events that can back REST timelines,
-    GraphQL timeline items, notifications, and webhooks.
-- [ ] 1.3.3. Publish fixture builders for collaboration graphs.
-  - Provide helpers for creating repositories with branches, issues, pull
-    requests, reviews, and checks in one place.
-  - Completion criteria: new slices can add scenario tests without hand-writing
-    unrelated entities.
+- Two repositories with the same name under different owners can coexist.
+- `/user` and GraphQL `viewer` resolve from the request actor rather than from
+  fixed store shortcuts.
+- New tests can compose actor-aware repository fixtures through published
+  builders rather than through route-local state mutation.
 
-## 2. Repository and issue collaboration slice
+## 2. GraphQL read model slice
 
-This phase delivers the first complete user-visible slice: a repository with
-issues, comments, labels, assignees, and timelines that can be created and
-manipulated through both REST and GraphQL.
+This tranche moves ahead of full issue mutation because Ghillie is a
+read-heavy GraphQL consumer and shared-actions already depends on pull request
+read state.
 
-### 2.1. Repository graph and content operations
+- [ ] 2.1. Deliver `2.1.1` for repository refs, commit history, and basic tree
+      traversal.
+  - Support `Repository.ref(qualifiedName)` and commit `history`.
+  - Fix broken or partial ref and tree behaviours.
+- [ ] 2.2. Deliver `3.1.2` for pull request list and detail reads.
+  - Support `repository.pullRequests` and
+    `repository.pullRequest(number)`.
+  - Add the field set currently required by Ghillie and shared-actions, with
+    cursor pagination.
+- [ ] 2.3. Deliver only the read-side subset of `2.2.1` needed for issue
+      visibility.
+  - Support `repository.issues` and the issue fields current consumers fetch.
+  - Defer broad issue mutation and timeline work.
 
-- [ ] 2.1.1. Complete repository, ref, and content scriptability. Requires
-      1.1.1 and 1.3.1.
-  - Support repository lookup, branch lookup, commit lookup, file contents, and
-    tree traversal from shared commit and blob entities.
-  - Fix existing broken or partial content behaviours such as tree lookup and
-    branch scoping.
-- [ ] 2.1.2. Add writeable branch and file mutation helpers. Requires 2.1.1.
-  - Support creating refs, updating refs, and committing file content changes
-    within simulator constraints.
-  - Completion criteria: tests can create a feature branch, modify files, and
-    observe those changes through REST and GraphQL reads.
+Completion criteria:
 
-### 2.2. Issues, comments, labels, and assignees
+- GraphQL can answer repository ref, history, issue, and pull request queries
+  without placeholder-only data.
+- The supported fields reflect actual consumer queries rather than schema-wide
+  optimism.
+- REST and GraphQL read selectors share the same underlying repository and
+  issue state.
 
-- [ ] 2.2.1. Implement issue lifecycle APIs. Requires 1.1.2, 1.2.2, and 1.3.1.
-  - Cover create, list, fetch, update, close, and reopen for issues.
-  - Keep REST and GraphQL views consistent for title, body, state, labels,
-    assignees, and author.
-- [ ] 2.2.2. Implement issue comments and reactions. Requires 2.2.1.
-  - Support create, edit, delete, and list operations for comments.
-  - Add timeline items so comment history is visible through both surfaces.
-- [ ] 2.2.3. Implement labels, milestones, and assignee management. Requires
-      2.2.1.
-  - Completion criteria: a repository fixture can create labelled issues,
-    reassign them, and query the same state through REST and GraphQL.
+## 3. Pull request state machine slice
 
-### 2.3. Issue timeline and notification parity
+This tranche lands before rich issue collaboration because Concordat and
+shared-actions both need pull requests to be real mutable objects rather than
+ornamental JSON.
 
-- [ ] 2.3.1. Add issue timeline REST and GraphQL views. Requires 1.3.2 and
-      2.2.2.
-  - Expose a stable subset of timeline items: opened, closed, reopened,
-    labelled, unlabelled, assigned, unassigned, commented.
-- [ ] 2.3.2. Add issue subscription and notification state. Requires 2.3.1.
-  - Model thread subscriptions, unread state, and per-actor notification
-    delivery for issues.
+- [ ] 3.1. Deliver `3.2.1`: create, update, close, and reopen pull requests.
+  - Model base ref, head ref, draft state, author, and open or closed state as
+    first-class mutable data.
+- [ ] 3.2. Deliver `3.2.3`: add pull request timeline items for the core state
+      transitions.
+  - Include opened, converted to draft, ready for review, closed, and reopened
+    events.
+- [ ] 3.3. Expand `3.1.1` only where needed to keep the pull request state
+      machine coherent.
+  - Link pull requests to branches, commits, and minimal issue references.
 
-## 3. Pull request lifecycle slice
+Completion criteria:
 
-This phase delivers a complete branch-to-pull-request flow. The outcome is that
-tests can create a feature branch, open a pull request, query it through REST
-and GraphQL, and observe changed files and discussion metadata.
+- A test can create a feature branch, open a pull request against another
+  branch, change its state, and read the same state through REST and GraphQL.
+- Pull request timelines expose the key transitions without reconstructing them
+  from unrelated route responses.
 
-### 3.1. Pull request domain model and read surfaces
+## 4. Concordat administration slice
 
-- [ ] 3.1.1. Add first-class pull request entities. Requires 1.1.2 and 2.1.2.
-  - Model base ref, head ref, author, draft state, merge state, requested
-    reviewers, linked issue number, and timeline events.
-- [ ] 3.1.2. Implement pull request list and detail APIs. Requires 3.1.1.
-  - Cover the common REST list/detail endpoints and GraphQL fields used by
-    repository and pull request views.
-- [ ] 3.1.3. Implement diff, file, and commit views. Requires 2.1.1 and 3.1.1.
-  - Expose changed files, commit list, compare data, and head/base metadata.
-  - Completion criteria: a test can open a pull request from a feature branch
-    and inspect its file delta through both APIs.
+This slice is new. It must land before deep review work because Concordat's
+core value sits in repository governance, branch protection, and team-driven
+access control.
 
-### 3.2. Pull request mutations and state transitions
+- [ ] 4.1. Add repository settings scriptability.
+  - Cover the settings Concordat manages directly, including merge strategy
+    controls, delete-branch-on-merge, and related repository policy flags.
+- [ ] 4.2. Add branch protection configuration scriptability.
+  - Model required reviews, required status checks, signed commits, linear
+    history, force-push constraints, and conversation-resolution gates.
+- [ ] 4.3. Deliver the minimum viable permission lattice from `1.2.2`.
+  - Model user, app, installation, and team access only to the depth needed by
+    repository administration and protected-branch behaviour.
+  - Defer a broader permission matrix until it is justified by later slices.
+- [ ] 4.4. Add teams, team membership, and team-repository permissions.
+  - Replace the current empty organisation team and membership placeholders
+    with store-backed behaviour.
+  - Support the repository permission states Concordat manages.
 
-- [ ] 3.2.1. Implement create, update, close, and reopen pull request
-      operations. Requires 3.1.2.
-- [ ] 3.2.2. Implement reviewer request management. Requires 1.2.2 and 3.2.1.
-  - Support requesting and removing individual reviewers and teams.
-- [ ] 3.2.3. Add pull request timeline items. Requires 1.3.2 and 3.2.1.
-  - Include opened, converted to draft, ready for review, closed, reopened,
-    reviewer requested, and review submitted events.
+Completion criteria:
 
-## 4. Reviews and review threads slice
+- Concordat-style workflows can script repository policy and team membership
+  without bypassing the simulator.
+- Branch protection state is visible through both configuration reads and
+  downstream mergeability decisions.
 
-This phase turns pull requests into genuinely reviewable artefacts. The goal is
-full scriptability for review requests, submitted reviews, inline comments, and
-thread resolution.
+## 5. Statuses, checks, mergeability, and auto-merge
 
-### 4.1. Review submission and decision states
+This tranche is the narrow but sharp shared-actions slice. It also closes the
+loop on Concordat's branch-protection model.
 
-- [ ] 4.1.1. Implement pull request review entities and submission flow.
-      Requires 3.2.1.
-  - Support pending reviews, submitted reviews, dismissal, and the common
-    review conclusions: comment, approve, and request changes.
-- [ ] 4.1.2. Expose review summaries through REST and GraphQL. Requires 4.1.1.
-  - GraphQL coverage should include the fields needed by review-centric user
-    interfaces, not only list totals.
-- [ ] 4.1.3. Add requested-reviewer and latest-review state selectors. Requires
-      4.1.1.
-  - Completion criteria: tests can assert review state transitions without
-    reconstructing them from raw comments.
+- [ ] 5.1. Deliver `5.1.1`: mutable commit status history.
+  - Replace fixed combined-status responses with per-sha status state.
+- [ ] 5.2. Deliver `5.1.2`: check suites and check runs.
+  - Cover the read and write operations needed by GitHub App and automation
+    flows.
+- [ ] 5.3. Deliver `5.2.1`: mergeability selectors.
+  - Include draft state, requested reviews, review conclusions, failing checks,
+    and merge conflicts.
+- [ ] 5.4. Deliver `5.2.2`: minimal branch-protection enforcement.
+  - Enforce required reviews and required checks against pull request state.
+- [ ] 5.5. Add GraphQL auto-merge state and mutation coverage.
+  - Support `autoMergeRequest`, `mergeStateStatus`, `mergeable`, and
+    `enablePullRequestAutoMerge`.
+- [ ] 5.6. Add early release-tag lookup support.
+  - Implement `GET /repos/{owner}/{repo}/releases/tags/{tag}` ahead of wider
+    Releases parity.
 
-### 4.2. Inline comments and review threads
+Completion criteria:
 
-- [ ] 4.2.1. Implement pull request review comments on diffs. Requires 3.1.3
-      and 4.1.1.
-  - Support side, line, commit, and path metadata for inline review comments.
-- [ ] 4.2.2. Implement review thread grouping and resolution. Requires 4.2.1.
-  - Provide thread identity, resolved state, reply chains, and actor
-    attribution.
-- [ ] 4.2.3. Expose review threads through GraphQL and REST. Requires 4.2.2.
-  - Completion criteria: review UI tests can render threads, replies, and
-    resolution state from simulator data alone.
+- shared-actions-style workflows can observe failing checks, enable auto-merge,
+  and see mergeability update as state changes.
+- Branch protection and mergeability derive from the same repository and review
+  model rather than from hard-coded response branches.
 
-### 4.3. Team review and membership-driven behaviour
+## 6. Review state slice
 
-- [ ] 4.3.1. Implement team review request resolution. Requires 1.2.2 and
-      4.1.1.
-  - Allow a team review request to expand into eligible reviewers according to
-    fixture membership.
-- [ ] 4.3.2. Add organisation team and membership GraphQL resolvers. Requires
-      4.3.1.
-  - Replace the current empty `teams` and `membersWithRole` placeholders with
-    store-backed data.
+Review state should land before review threads because required approvals and
+latest-review state matter earlier than pixel-perfect conversation modelling.
 
-## 5. Checks, mergeability, and merge outcomes slice
+- [ ] 6.1. Deliver `4.1.1`: review entities and submission flow.
+  - Support pending reviews, submitted reviews, dismissal, approval, comment,
+    and request-changes outcomes.
+- [ ] 6.2. Deliver `4.1.2`: REST and GraphQL review summaries.
+  - Cover the fields needed by approval and mergeability decisions, not only
+    totals.
+- [ ] 6.3. Deliver `4.1.3`: requested-reviewer and latest-review selectors.
+  - Expose the state needed for protected-branch rules and automation.
 
-This phase makes pull requests operationally useful. A pull request should be
-able to collect status, become mergeable or blocked, and change repository
-state when merged.
+Completion criteria:
 
-### 5.1. Commit status and check run scriptability
+- Required-review logic can evaluate approvals and change requests without
+  reconstructing state from raw review comments.
+- REST and GraphQL expose consistent latest-review and requested-reviewer data.
 
-- [ ] 5.1.1. Implement commit status history. Requires 2.1.1 and 3.1.3.
-  - Replace fixed combined-status responses with mutable per-sha status state.
-- [ ] 5.1.2. Implement check suites and check runs. Requires 5.1.1.
-  - Cover the read and write operations needed by GitHub Apps and deployment
-    tooling.
-- [ ] 5.1.3. Add GraphQL status and check summaries. Requires 5.1.2.
-  - Completion criteria: a pull request can show failing checks and later show
-    success after scripted updates.
+## 7. Review threads and conversation resolution
 
-### 5.2. Mergeability, branch protection, and merge execution
+This tranche deepens pull request collaboration after the approval model is
+already useful.
 
-- [ ] 5.2.1. Implement mergeability selectors. Requires 4.2.3 and 5.1.2.
-  - Consider open review requests, requested changes, failing checks, merge
-    conflicts, and draft state.
-- [ ] 5.2.2. Implement a minimal branch protection model. Requires 1.2.2 and
-      5.2.1.
-  - Support required reviews, required checks, and force-push constraints.
-- [ ] 5.2.3. Implement merge operations. Requires 5.2.2.
-  - Support merge, squash, and rebase strategies with observable post-merge
-    effects on refs, timelines, and pull request state.
-  - Completion criteria: tests can merge an approved pull request and observe
-    repository, issue, and webhook changes.
+- [ ] 7.1. Deliver `4.2.1`: inline review comments on diffs.
+  - Support path, line, side, and commit metadata.
+- [ ] 7.2. Deliver `4.2.2`: review thread grouping and resolution.
+  - Provide resolved state, reply chains, and actor attribution.
+- [ ] 7.3. Deliver `4.2.3`: REST and GraphQL review thread exposure.
+  - Make thread state available to UI-style consumers and automation.
 
-## 6. App-facing integration slice
+Completion criteria:
 
-This phase makes the simulator useful for realistic integration tests for
-GitHub Apps, cataloguers, and platform services that consume GitHub events and
-query mixed REST and GraphQL surfaces.
+- Conversation resolution can participate in protected-branch decisions.
+- Review UIs can render thread state from simulator data alone.
 
-### 6.1. Webhooks and delivery history
+## 8. Deeper issue collaboration slice
 
-- [ ] 6.1.1. Emit webhook events for issue and pull request activity. Requires
-      1.3.2, 2.2.1, and 3.2.1.
-  - Cover the common events needed by automation: `issues`,
-    `issue_comment`, `pull_request`, `pull_request_review`, and
-    `pull_request_review_comment`.
-- [ ] 6.1.2. Add webhook delivery inspection and replay helpers. Requires
-      6.1.1.
-  - Provide a deterministic delivery log so tests can assert payload order and
-    contents.
+Issue parity remains important, but it no longer blocks the earlier slices that
+carry more portfolio value today.
 
-### 6.2. REST and GraphQL parity sweep for common workflows
+- [ ] 8.1. Finish the mutation side of `2.2.1`.
+  - Cover issue create, update, close, and reopen flows end to end.
+- [ ] 8.2. Deliver `2.2.2` and `2.2.3`.
+  - Add issue comments, reactions, labels, milestones, and assignee
+    management.
+- [ ] 8.3. Deliver `2.3.1` and `2.3.2`.
+  - Add timeline views, subscriptions, and notification state.
 
-- [ ] 6.2.1. Add a capability matrix for the supported collaboration slices.
-      Requires 2.3.2, 4.3.2, and 5.2.3.
-  - Document which REST endpoints and GraphQL fields are fully scriptable,
-    placeholder-only, or intentionally unsupported.
-- [ ] 6.2.2. Add end-to-end scenario suites. Requires 6.1.2.
-  - Cover at least:
-    - issue creation and triage
-    - pull request open, review, and merge
-    - review thread resolution
-    - failing check to passing check transition
-    - webhook delivery for each scenario
-- [ ] 6.2.3. Publish fixture recipes for common consumers. Requires 6.2.2.
-  - Provide ready-made builders for GitHub App, Backstage catalog, and review
-    workflow scenarios.
+Completion criteria:
+
+- Repository triage workflows can operate through the simulator without direct
+  store edits.
+- Issue timeline events and notification state derive from the shared event
+  model.
+
+## 9. Capability matrix, fixture recipes, and scenarios
+
+The capability contract should become explicit before webhook breadth, because
+simulacat and future test harnesses need a crisp agreement on what is and is
+not scriptable.
+
+- [ ] 9.1. Publish a capability matrix for supported REST endpoints and
+      GraphQL fields.
+  - Distinguish fully scriptable, schema-stubbed, placeholder-only, and
+    unsupported behaviour.
+- [ ] 9.2. Publish scenario builders and fixture recipes.
+  - Provide ready-made builders for Concordat, Ghillie, shared-actions, and
+    other common consumer shapes.
+- [ ] 9.3. Add end-to-end scenario suites.
+  - Cover the admin, read-model, pull request, mergeability, and review slices
+    before webhook assertions are added.
+
+Completion criteria:
+
+- Consumers can select a documented simulator capability profile rather than
+  inferring support from the schema.
+- New integration tests can start from published recipes instead of rebuilding
+  the same fixture graphs.
+
+## 10. Webhooks and delivery inspection
+
+Webhooks move down the queue because current high-value consumers rely more on
+polling and direct reads than on webhook delivery.
+
+- [ ] 10.1. Deliver `6.1.1`: webhook events for issue and pull request
+      activity.
+- [ ] 10.2. Deliver `6.1.2`: delivery inspection and replay helpers.
+  - Provide deterministic delivery logs and replay support for assertions.
+
+Completion criteria:
+
+- Webhook payloads are driven by the same domain events as REST and GraphQL
+  reads.
+- Delivery assertions do not require route-local mocking or bespoke test-only
+  hooks.
+
+## 11. Governance extras
+
+These items remain important, especially for Concordat, but they should follow
+once the shared substrate and core consumer slices are credible.
+
+- [ ] 11.1. Add Projects v2 parity for the fields and mutations Concordat
+      actually uses.
+- [ ] 11.2. Add code-scanning and SARIF parity where Concordat governance flows
+      depend on them.
+- [ ] 11.3. Reassess whether further enterprise administration surfaces belong
+      in this package or in adjacent simulators.
+
+Completion criteria:
+
+- Governance extras build on the same actor, permission, and event models used
+  by the earlier slices.
+- The package does not accumulate broad enterprise parity without a concrete
+  consumer and a testable slice definition.
 
 ## Sequencing notes
 
-- Phase 1 is intentionally narrow. Any task that does not directly unlock
-  writeable collaboration slices should be deferred.
-- Phase 2 is the first complete collaboration slice and should land before pull
-  request work begins.
-- Phase 3 depends on repository and branch mutation support from Phase 2.
-- Phase 4 depends on the pull request domain model from Phase 3, but its team
-  membership work also strengthens the actor model from Phase 1.
-- Phase 5 should not begin until pull request reviews are scriptable, because
-  mergeability without review state produces misleading results.
-- Phase 6 should only sweep parity for the slices already delivered. It should
-  not become a back door for adding unrelated feature areas.
+- The original task identifiers remain useful as reference labels, but delivery
+  order is now governed by the tranches above rather than by the previous
+  collaboration-first phase order.
+- `1.2.2` should stay minimal until the administration and branch-protection
+  work requires more depth.
+- Review state (`4.1.x`) should complete before review threads (`4.2.x`).
+- Capability matrices and scenario recipes should land before broad webhook
+  parity because they define the contract that external test harnesses consume.
+- Projects v2 and code-scanning work should not displace the shared substrate,
+  GraphQL read model, or mergeability slices unless a portfolio change makes
+  that trade-off explicit.
 
 ## Definition of done for the roadmap
 
 The roadmap should be treated as complete when all of the following are true:
 
-- Repository, issue, pull request, review, and merge workflows are writeable
-  and queryable through both REST and GraphQL.
-- Actor-aware permissions replace the current fixed-user shortcuts.
-- Webhooks and notifications are driven by the same domain events as REST and
-  GraphQL reads.
-- The package documentation explains supported slices and their limits clearly.
-- End-to-end tests prove the vertical slices work without hand-editing internal
-  store state between steps.
+- Concordat-style repository governance and team administration workflows are
+  scriptable through the simulator.
+- Ghillie-style GraphQL reads for refs, history, pull requests, and issues are
+  backed by real shared state rather than by schema breadth alone.
+- shared-actions-style mergeability, checks, auto-merge, and release-tag
+  workflows are scriptable end to end.
+- REST, GraphQL, and webhooks are parallel views over shared entities, actor
+  context, and domain events.
+- The capability matrix and fixture recipes make the supported contract clear
+  enough for external test harnesses to depend on it directly.
